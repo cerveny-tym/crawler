@@ -1,0 +1,3 @@
+http://developers.redhat.com/
+http://hibernate.org
+http://in.relation.to
