@@ -13,7 +13,7 @@ Choice.options do
 
   separator 'Required:'
 
-  option :urls, :required => true do
+  option :urls, :required => false do
     short '-u'
     long '--url=<file>'
     desc 'The base url'
@@ -39,36 +39,46 @@ class Crawler
   Mongo::Logger.logger.level = Logger::WARN
 
   def initialize(base_urls, depth)
-    #puts ARGV
+    @client = Mongo::Client.new('mongodb://redteam:redpassword@ds061415.mongolab.com:61415/buzzword')
+    puts @client.database.collections.to_s
+
     @urls = Array.new
-    File.open(base_urls, "r") do |f|
-      f.each_line do |line|
-        @urls.push line
+    if base_urls.nil?
+      documents = @client[:urls].find
+      documents.each do |document|
+        @urls.push document["url"]
+      end
+    else
+      File.open(base_urls, "r") do |f|
+        f.each_line do |line|
+          @urls.push line
+        end
       end
     end
+    puts "Crawling: #{@urls}"
 
     @depth = depth.nil? ? 1 : depth.to_i
   end
 
   def crawl
-
-    client = Mongo::Client.new('mongodb://redteam:redpassword@ds061415.mongolab.com:61415/buzzword')
-
-    database = client.database
-    p database.collections
-
     reindex = Array.new
     saved = 0
 
     @urls.each do |base_url|
+      raw_collection = @client[:raw]
       Anemone.crawl(base_url, :depth_limit => @depth) do |anemone|
         anemone.on_every_page do |page|
 
           unless page.doc.nil?
-            raw = page.doc.xpath("//text()").to_s
-            raw = raw.downcase.gsub /\W+/, ' '
+            raw_data = page.doc.xpath("//text()").to_s
+            raw_data = raw_data.downcase.gsub /\W+/, ' '
             #p raw
-            result = client[:raw].insert_one({ "url" => page.url.to_s, "data" => raw })
+            #result = raw_collection.insert_one({ "url" => page.url.to_s, "data" => raw_data })
+            # result = raw_collection.update_one (
+            #   { "url" => page.url.to_s },
+            #   { "$inc" => { "url" => page.url.to_s, "data" => raw_data }}
+            # )
+result = raw_collection.update_one({ :name => page.url.to_s }, { :data => raw_data })
             saved = saved + 1
           end
         end
@@ -81,5 +91,5 @@ class Crawler
   private
 end
 
-  crawler = Crawler.new( Choice.choices.urls, 1 )
-  crawler.crawl
+crawler = Crawler.new( nil, 1 )
+crawler.crawl
